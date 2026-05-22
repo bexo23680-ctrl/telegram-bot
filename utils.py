@@ -17,7 +17,7 @@ COVER_CACHE = "channel_cover_cached.jpg"
 CHANNEL_USERNAME = "BEXO50"
 
 # ايدي المالك - غير هذا الرقم إلى معرفك
-OWNER_ID = 8460454874  # ⚠️ غير هذا الرقم
+OWNER_ID = 8798182716  # ⚠️ غير هذا الرقم
 
 # وضع الصيانة
 MAINTENANCE_MODE = False
