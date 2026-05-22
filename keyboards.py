@@ -18,7 +18,7 @@ def my_song_menu_keyboard():
         [InlineKeyboardButton("🎬 استخراج من فيديو + صورة", callback_data="mysong_extract")],
         [InlineKeyboardButton("✨ أغنية جديدة + صورة", callback_data="mysong_new")],
        # [InlineKeyboardButton("📊 إحصائياتي", callback_data="my_stats")],
-        [InlineKeyboardButton("↩️ التراجع عن آخر عملية", callback_data="undo_last")],
+       # [InlineKeyboardButton("↩️ التراجع عن آخر عملية", callback_data="undo_last")],
         [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_action")]
     ]
     return InlineKeyboardMarkup(keyboard)
