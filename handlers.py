@@ -153,33 +153,33 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
-async def get_user_full_stats(user_id: int) -> str:
-    """إحصائيات مفصلة للمستخدم"""
-    conn = sqlite3.connect(DB_FILE)
+#async def get_user_full_stats(user_id: int) -> str:
+    #"""إحصائيات مفصلة للمستخدم"""
+    #conn = sqlite3.connect(DB_FILE)
     
-    files_count = conn.execute("SELECT COUNT(*) FROM files WHERE user_id = ?", (user_id,)).fetchone()[0]
+  #  files_count = conn.execute("SELECT COUNT(*) FROM files WHERE user_id = ?", (user_id,)).fetchone()[0]
     
-    last_files = conn.execute(
-        "SELECT title, artist, date FROM files WHERE user_id = ? ORDER BY id DESC LIMIT 5",
-        (user_id,)
-    ).fetchall()
+   # last_files = conn.execute(
+     #   "SELECT title, artist, date FROM files WHERE user_id = ? ORDER BY id DESC LIMIT 5",
+     #   (user_id,)
+#    ).fetchall()
     
-    total_size = conn.execute("SELECT SUM(file_size) FROM files WHERE user_id = ?", (user_id,)).fetchone()[0] or 0
+   # total_size = conn.execute("SELECT SUM(file_size) FROM files WHERE user_id = ?", (user_id,)).fetchone()[0] or 0
     
-    conn.close()
+   # conn.close()
+    #
+   # msg = f"📊 **إحصائياتك الشخصية**\n\n"
+   # msg += f"📁 عدد العمليات الناجحة: {files_count}\n"
+   # msg += f"💾 إجمالي حجم الملفات: {total_size // (1024*1024)} MB\n\n"
     
-    msg = f"📊 **إحصائياتك الشخصية**\n\n"
-    msg += f"📁 عدد العمليات الناجحة: {files_count}\n"
-    msg += f"💾 إجمالي حجم الملفات: {total_size // (1024*1024)} MB\n\n"
+   # if last_files:
+    #    msg += "**🎵 آخر أعمالك:**\n"
+      #  for title, artist, date in last_files:
+      #      msg += f"• {title} - {artist}\n"
+   # else:
+    #    msg += "📭 لا توجد عمليات سابقة بعد\n"
     
-    if last_files:
-        msg += "**🎵 آخر أعمالك:**\n"
-        for title, artist, date in last_files:
-            msg += f"• {title} - {artist}\n"
-    else:
-        msg += "📭 لا توجد عمليات سابقة بعد\n"
-    
-    return msg
+    #return msg
 
 # ============================================
 # معالج الملفات (الصوت والفيديو) - MEDIA_HANDLER
