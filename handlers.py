@@ -37,7 +37,7 @@ async def send_subscription_required_message(update: Update, context: ContextTyp
     """إرسال رسالة اشتراك إجباري موحدة"""
     keyboard = [
         [InlineKeyboardButton(f"📢 اشترك في القناة", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}")],
-        [InlineKeyboardButton("🔄 تأكد مرة أخرى", callback_data="check_subscription")]
+       # [InlineKeyboardButton("🔄 تأكد مرة أخرى", callback_data="check_subscription")]
     ]
     
     await update.message.reply_text(
