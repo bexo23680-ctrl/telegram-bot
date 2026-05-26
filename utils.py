@@ -14,7 +14,7 @@ DB_FILE = "bot_stats.db"
 MAX_FILE_SIZE = 70 * 1024 * 1024
 DEFAULT_AUDIO_QUALITY = "192k"
 COVER_CACHE = "channel_cover_cached.jpg"
-CHANNEL_USERNAME = "BEXO50"
+CHANNEL_USERNAME = "@BEXO50"
 
 # ايدي المالك - غير هذا الرقم إلى معرفك
 OWNER_ID = 8798182716  # ⚠️ غير هذا الرقم
