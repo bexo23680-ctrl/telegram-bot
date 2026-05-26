@@ -29,7 +29,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user = update.effective_user
     if not await check_subscription(user.id, context):
-        await update.message.reply_text("⚠️ اشترك بالقناة أولاً: @THTOMI")
+        await update.message.reply_text("⚠️ اشترك بالقناة أولاً: @BEXO50")
         return
 
     conn = sqlite3.connect(DB_FILE)
