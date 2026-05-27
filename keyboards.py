@@ -1,31 +1,39 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 
-# القائمة الرئيسية
+# القائمة الرئيسية (بدون زر تشغيل زائد)
 def main_menu_keyboard():
     keyboard = [
-        [KeyboardButton("▶️ تشغيل البوت")],  # زر في سطر منفصل
-        [KeyboardButton("🎵 تعديل الأغاني"), KeyboardButton("🎬 استخراج من الفيديو")],
-        [KeyboardButton("🖼️ أغنيتي (القائمة المتكاملة)")],
-        [KeyboardButton("🔙 الرجوع إلى البداية")]
+        [KeyboardButton("🎵 تعديل الأغنية"), KeyboardButton("🎬 استخراج صوت من فيديو")],
+        [KeyboardButton("🖼️ إنشاء أغنية كاملة (اسم + صورة + صوت)")],
+        [KeyboardButton("📊 إحصائياتي"), KeyboardButton("🛠 لوحة التحكم")] if False else [],
+        [KeyboardButton("📊 إحصائياتي")],
     ]
+    # تصفية الأزرار None
+    keyboard = [row for row in keyboard if row]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# قائمة أغنيتي الداخلية
+# قائمة أغنيتي الداخلية (الخيارات المتكاملة)
 def my_song_menu_keyboard():
     keyboard = [
-        [InlineKeyboardButton("🎵 تعديل أغنية (اسم + صورة)", callback_data="mysong_edit")],
-        [InlineKeyboardButton("🎬 استخراج من فيديو + صورة", callback_data="mysong_extract")],
+        [InlineKeyboardButton("📝 تعديل اسم وصورة أغنية", callback_data="mysong_edit")],
+        [InlineKeyboardButton("🎬 استخراج صوت من فيديو + إضافة صورة", callback_data="mysong_extract")],
+        [InlineKeyboardButton("🆕 رفع ملف صوتي جديد + صورة", callback_data="mysong_new")],
         [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_action")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# قائمة اختيار الجودة
+# قائمة اختيار الجودة للوضع العادي
 def quality_keyboard(action_type):
     keyboard = [
         [
-            InlineKeyboardButton("128k", callback_data=f"q_128_{action_type}"),
-            InlineKeyboardButton("192k", callback_data=f"q_192_{action_type}"),
-        InlineKeyboardButton("❌ إلغاء", callback_data="cancel_action")]
+            InlineKeyboardButton("🎵 128kbps", callback_data=f"q_128_{action_type}"),
+            InlineKeyboardButton("🎵 192kbps", callback_data=f"q_192_{action_type}"),
+        ],
+        [
+            InlineKeyboardButton("🎵 256kbps", callback_data=f"q_256_{action_type}"),
+            InlineKeyboardButton("🎵 320kbps", callback_data=f"q_320_{action_type}"),
+        ],
+        [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_action")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -33,9 +41,20 @@ def quality_keyboard(action_type):
 def admin_panel_keyboard(maintenance_status):
     m_text = "🔴 إيقاف الصيانة" if maintenance_status else "🟢 تفعيل الصيانة"
     keyboard = [
-        [InlineKeyboardButton("📊 إحصائيات البوت الشاملة", callback_data="admin_stats")],
+        [InlineKeyboardButton("📊 إحصائيات البوت", callback_data="admin_stats")],
         [InlineKeyboardButton(m_text, callback_data="toggle_maintenance")],
         [InlineKeyboardButton("📢 إذاعة (Broadcast)", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("🗑 تنظيف الملفات المؤقتة", callback_data="admin_clean")],
         [InlineKeyboardButton("❌ إغلاق اللوحة", callback_data="close_admin")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# لوحة تأكيد
+def confirm_keyboard(action):
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ نعم", callback_data=f"confirm_{action}"),
+            InlineKeyboardButton("❌ لا", callback_data="cancel_action"),
+        ]
     ]
     return InlineKeyboardMarkup(keyboard)
