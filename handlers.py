@@ -24,7 +24,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not await check_subscription(user.id, context):
         await update.message.reply_text(
-            "⚠️ **أنت غير مشترك في القناة!**\n\n"
+            "⚠️ أنت غير مشترك في القناة!\n\n"
             "يجب الاشتراك أولاً في القناة التالية:\n"
             f"👉 @BEXO50\n\n"
             "بعد الاشتراك، ارسل /start مرة أخرى."
@@ -34,7 +34,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_user(user.id, user.first_name)
 
     await update.message.reply_text(
-        f"🚀 **أهلاً بك {user.first_name} في بوت الخدمات الصوتية!**\n\n"
+        f"🚀 أهلاً بك {user.first_name} في بوت الخدمات الصوتية!\n\n"
         "إختر ما تريد فعله من الأزرار أدناه:",
         reply_markup=main_menu_keyboard()
     )
@@ -55,7 +55,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['mode'] = 'mysong_edit'
         context.user_data['step'] = 'waiting_for_audio'
         await query.edit_message_text(
-            "🎵 **تعديل أغنية موجودة**\n\n"
+            "🎵 تعديل أغنية موجودة\n\n"
             "📤 أرسل لي الآن الملف الصوتي (MP3) الذي تريد تعديل اسمه وإضافة صورة له.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
@@ -65,7 +65,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['mode'] = 'mysong_extract'
         context.user_data['step'] = 'waiting_for_video'
         await query.edit_message_text(
-            "🎬 **استخراج صوت من فيديو + إضافة صورة**\n\n"
+            "🎬 استخراج صوت من فيديو + إضافة صورة\n\n"
             "📤 أرسل لي الآن ملف الفيديو (MP4) لاستخراج الصوت منه، ثم سنضيف الاسم والصورة.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
@@ -75,7 +75,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['mode'] = 'mysong_new'
         context.user_data['step'] = 'waiting_for_audio'
         await query.edit_message_text(
-            "🆕 **رفع ملف صوتي جديد + صورة**\n\n"
+            "🆕 رفع ملف صوتي جديد + صورة\n\n"
             "📤 أرسل لي الآن الملف الصوتي (MP3) وسأطلب منك الاسم والفنان والصورة.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
@@ -108,7 +108,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         conn.close()
         
         await query.edit_message_text(
-            f"📊 **إحصائياتك الشخصية**\n\n"
+            f"📊 إحصائياتك الشخصية\n\n"
             f"✅ عدد الأغاني التي قمت بمعالجتها: {files_count}"
         )
 
@@ -150,7 +150,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             context.user_data['audio_path'] = audio_path
             context.user_data['step'] = 'waiting_for_title'
-            await wait_msg.edit_text("📝 أرسل الآن **اسم الأغنية**:")
+            await wait_msg.edit_text("📝 أرسل الآن اسم الأغنية:")
             return
         
         # استقبال ملف الفيديو
@@ -246,7 +246,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data["file_path"] = output_path
     context.user_data["step"] = "title"
-    await wait_msg.edit_text("📝 تمت المعالجة! الآن أرسل **اسم الأغنية**:")
+    await wait_msg.edit_text("📝 تمت المعالجة! الآن أرسل اسم الأغنية:")
 
 # ============================================
 # معالج الصور
@@ -400,7 +400,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif user_text == "🎵 تعديل الأغنية":
         from keyboards import quality_keyboard
         await update.message.reply_text(
-            "🎵 **تعديل أغنية**\n\nاختر جودة الصوت المطلوبة:",
+            "🎵 تعديل أغنية\n\nاختر جودة الصوت المطلوبة:",
             reply_markup=quality_keyboard("edit")
         )
         return
@@ -409,7 +409,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif user_text == "🎬 استخراج صوت من فيديو":
         from keyboards import quality_keyboard
         await update.message.reply_text(
-            "🎬 **استخراج صوت من فيديو**\n\nاختر جودة الصوت المطلوبة:",
+            "🎬 استخراج صوت من فيديو\n\nاختر جودة الصوت المطلوبة:",
             reply_markup=quality_keyboard("extract")
         )
         return
@@ -418,7 +418,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif user_text == "🖼️ إنشاء أغنية كاملة (اسم + صورة + صوت)":
         from keyboards import my_song_menu_keyboard
         await update.message.reply_text(
-            "🖼️ **إنشاء أغنية كاملة**\n\nاختر ما تريد فعله:",
+            "🖼️ إنشاء أغنية كاملة\n\nاختر ما تريد فعله:",
             reply_markup=my_song_menu_keyboard()
         )
         return
@@ -432,7 +432,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         
         await update.message.reply_text(
-            f"📊 **إحصائياتك الشخصية**\n\n"
+            f"📊 إحصائياتك الشخصية\n\n"
             f"✅ عدد الأغاني التي تمت معالجتها: {files_count}"
         )
         return
@@ -456,7 +456,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             context.user_data['title'] = user_text
             context.user_data['step'] = 'waiting_for_artist'
-            await update.message.reply_text("🎤 أرسل الآن **اسم الفنان**:")
+            await update.message.reply_text("🎤 أرسل الآن اسم الفنان:")
             return
         
         elif step == 'waiting_for_artist':
@@ -466,7 +466,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['artist'] = user_text
             context.user_data['step'] = 'waiting_for_cover'
             await update.message.reply_text(
-                "🖼️ **أرسل الآن الصورة** التي تريد استخدامها كغلاف للأغنية\n"
+                "🖼️أرسل الآن الصورة التي تريد استخدامها كغلاف للأغنية\n"
                 "(JPG أو PNG)"
             )
             return
