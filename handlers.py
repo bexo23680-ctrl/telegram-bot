@@ -67,7 +67,7 @@ async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k
         elif file_size > 30 * 1024 * 1024:
             timeout_value = 300
         
-        if progress_msg and file_size_mb > 15:
+        if progress_msg and file_size_mb > 80:
             await progress_msg.edit_text(
                 f"⏳ **جاري تحويل ملف كبير ({file_size_mb:.1f} MB)**\n\n"
                 f"⏱️ قد يستغرق {int(timeout_value/60)}-{int(timeout_value/60)+2} دقائق...\n"
