@@ -13,6 +13,14 @@ from utils import (
 )
 
 # ============================================
+# إعدادات المهلات للملفات الكبيرة
+# ============================================
+DOWNLOAD_TIMEOUT_LARGE = 300  # 5 دقائق للملفات الكبيرة
+CONVERT_TIMEOUT = 180  # 3 دقائق للتحويل
+EXTRACT_TIMEOUT = 300  # 5 دقائق لاستخراج الصوت
+MAX_FILE_SIZE_WARNING = 30 * 1024 * 1024  # 30MB - إظهار تحذير
+
+# ============================================
 # دالة البداية
 # ============================================
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -40,15 +48,33 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ============================================
-# دالة تحويل أي ملف صوتي إلى MP3 (محسنة)
+# دالة تحويل أي ملف صوتي إلى MP3 (محسنة مع مهلة)
 # ============================================
-async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k") -> tuple:
+async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k", progress_msg=None) -> tuple:
     """
     تحويل أي ملف صوتي إلى MP3 مع ضمان عدم فقدان الصوت
     تعيد (النجاح, رسالة_الخطأ)
     """
     try:
-        # أولاً: التحقق من وجود الصوت في الملف الأصلي
+        # التحقق من حجم الملف
+        file_size = os.path.getsize(input_path) if os.path.exists(input_path) else 0
+        file_size_mb = file_size / (1024 * 1024)
+        
+        # تحديد المهلة حسب حجم الملف
+        timeout_value = CONVERT_TIMEOUT
+        if file_size > 60 * 1024 * 1024:
+            timeout_value = 360
+        elif file_size > 30 * 1024 * 1024:
+            timeout_value = 300
+        
+        if progress_msg and file_size_mb > 15:
+            await progress_msg.edit_text(
+                f"⏳ **جاري تحويل ملف كبير ({file_size_mb:.1f} MB)**\n\n"
+                f"⏱️ قد يستغرق {int(timeout_value/60)}-{int(timeout_value/60)+2} دقائق...\n"
+                f"💡 الرجاء الانتظار..."
+            )
+        
+        # التحقق من وجود الصوت
         probe_cmd = [
             "ffprobe", "-v", "error",
             "-show_entries", "stream=codec_type",
@@ -56,21 +82,21 @@ async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k
             input_path
         ]
         
-        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
         if "audio" not in probe_result.stdout:
             return False, "الملف لا يحتوي على مسار صوتي"
         
-        # محاولة التحويل الأولى (الأمر المحسن)
+        # محاولة التحويل الأولى
         cmd = [
             "ffmpeg", "-i", input_path,
-            "-vn",                           # إزالة الفيديو إن وجد
-            "-acodec", "libmp3lame",         # ترميز MP3
-            "-ac", "2",                      # ستيريو
-            "-ar", "44100",                  # تردد 44.1kHz
-            "-b:a", quality,                 # الجودة المختارة
-            "-af", "volume=1.0,aresample=44100",  # تصحيح مستوى الصوت
-            "-write_xing", "1",              # إضافة Xing header
-            "-map_metadata", "-1",           # إزالة metadata التالفة
+            "-vn",
+            "-acodec", "libmp3lame",
+            "-ac", "2",
+            "-ar", "44100",
+            "-b:a", quality,
+            "-af", "volume=1.0,aresample=44100",
+            "-write_xing", "1",
+            "-map_metadata", "-1",
             "-y",
             output_path
         ]
@@ -80,11 +106,16 @@ async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await process.communicate()
+        
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_value)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return False, f"انتهى وقت التحويل (أكثر من {timeout_value} ثانية)"
         
         # إذا فشلت المحاولة الأولى، جرب أمراً أبسط
         if process.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
-            # المحاولة الثانية (أمر بسيط)
             cmd2 = [
                 "ffmpeg", "-i", input_path,
                 "-b:a", quality,
@@ -97,14 +128,19 @@ async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            await process2.communicate()
+            
+            try:
+                await asyncio.wait_for(process2.wait(), timeout=timeout_value)
+            except asyncio.TimeoutError:
+                process2.kill()
+                await process2.wait()
+                return False, "انتهى وقت التحويل البسيط"
             
             if process2.returncode != 0:
                 return False, "فشل تحويل الملف إلى MP3"
         
         # التحقق من نجاح التحويل
         if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-            # فحص إضافي للتأكد من وجود صوت
             if await verify_audio_has_sound(output_path):
                 return True, "success"
             else:
@@ -114,6 +150,8 @@ async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k
         
     except asyncio.TimeoutError:
         return False, "انتهى وقت التحويل"
+    except subprocess.TimeoutExpired:
+        return False, "انتهى وقت فحص الملف"
     except Exception as e:
         return False, f"خطأ: {str(e)[:100]}"
 
@@ -123,7 +161,6 @@ async def verify_audio_has_sound(file_path: str) -> bool:
         if not os.path.exists(file_path) or os.path.getsize(file_path) < 1000:
             return False
         
-        # استخدام ffprobe للتحقق
         cmd = [
             "ffprobe", "-v", "error",
             "-show_entries", "format=duration",
@@ -140,7 +177,6 @@ async def verify_audio_has_sound(file_path: str) -> bool:
         except:
             pass
         
-        # فحص بديل باستخدام mutagen
         try:
             from mutagen.mp3 import MP3
             audio = MP3(file_path)
@@ -152,14 +188,30 @@ async def verify_audio_has_sound(file_path: str) -> bool:
         return False
         
     except Exception:
-        return True  # نفترض أنه سليم إذا فشل الفحص
+        return True
 
 # ============================================
-# دالة استخراج الصوت من الفيديو (محسنة)
+# دالة استخراج الصوت من الفيديو (محسنة مع مهلة)
 # ============================================
-async def extract_audio_from_video(video_path: str, output_path: str, quality: str = "192k") -> tuple:
-    """استخراج الصوت من الفيديو مع ضمان الجودة"""
+async def extract_audio_from_video(video_path: str, output_path: str, quality: str = "192k", progress_msg=None) -> tuple:
+    """استخراج الصوت من الفيديو مع ضمان الجودة والمهلة"""
     try:
+        file_size = os.path.getsize(video_path) if os.path.exists(video_path) else 0
+        file_size_mb = file_size / (1024 * 1024)
+        
+        timeout_value = EXTRACT_TIMEOUT
+        if file_size > 60 * 1024 * 1024:
+            timeout_value = 420
+        elif file_size > 30 * 1024 * 1024:
+            timeout_value = 360
+        
+        if progress_msg and file_size_mb > 20:
+            await progress_msg.edit_text(
+                f"⏳ **جديد استخراج صوت من فيديو كبير ({file_size_mb:.1f} MB)**\n\n"
+                f"⏱️ قد يستغرق {int(timeout_value/60)}-{int(timeout_value/60)+2} دقائق...\n"
+                f"💡 الرجاء الانتظار..."
+            )
+        
         cmd = [
             "ffmpeg", "-i", video_path,
             "-vn",
@@ -177,10 +229,19 @@ async def extract_audio_from_video(video_path: str, output_path: str, quality: s
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        await process.wait()
+        
+        try:
+            await asyncio.wait_for(process.wait(), timeout=timeout_value)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return False, f"انتهى وقت استخراج الصوت (أكثر من {timeout_value} ثانية)"
         
         if process.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-            return True, "success"
+            if await verify_audio_has_sound(output_path):
+                return True, "success"
+            else:
+                return False, "الملف المستخرج لا يحتوي على صوت"
         else:
             return False, "فشل استخراج الصوت"
             
@@ -197,14 +258,13 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     await query.answer()
     
-    # ===== أزرار وضع "أغنيتي" المتكاملة =====
     if data == "mysong_edit":
         context.user_data.clear()
         context.user_data['mode'] = 'mysong_edit'
         context.user_data['step'] = 'waiting_for_audio'
         await query.edit_message_text(
             "🎵 تعديل أغنية موجودة\n\n"
-            "📤 أرسل لي الآن الملف الصوتي الذي تريد تعديله.\n\n"
+            "📤 أرسل لي الآن الملف الصوتي (MP3, M4A, AAC, OGG, WAV, FLAC) الذي تريد تعديله.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
     
@@ -214,7 +274,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['step'] = 'waiting_for_video'
         await query.edit_message_text(
             "🎬 استخراج صوت من فيديو + إضافة صورة\n\n"
-            "📤 أرسل لي الآن ملف الفيديو لاستخراج الصوت منه.\n\n"
+            "📤 أرسل لي الآن ملف الفيديو (MP4, AVI, MKV, MOV) لاستخراج الصوت منه.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
     
@@ -224,11 +284,10 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['step'] = 'waiting_for_audio'
         await query.edit_message_text(
             "🆕 رفع ملف صوتي جديد + صورة\n\n"
-            "📤 أرسل لي الآن الملف الصوتي .\n\n"
+            "📤 أرسل لي الآن الملف الصوتي (MP3, M4A, AAC, OGG, WAV, FLAC).\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
     
-    # ===== أزرار اختيار الجودة =====
     elif data.startswith("q_"):
         parts = data.split("_")
         quality = parts[1] + "k"
@@ -237,9 +296,9 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['action_type'] = action
         
         if action == "edit":
-            msg = "🎵 أرسل الآن الملف الصوتي لتعديله:"
+            msg = "🎵 أرسل الآن الملف الصوتي (MP3, M4A, OGG, WAV, FLAC) لتعديله:"
         else:
-            msg = "🎬 أرسل الآن ملف الفيديو لاستخراج الصوت منه:"
+            msg = "🎬 أرسل الآن ملف الفيديو (MP4, AVI, MKV, MOV) لاستخراج الصوت منه:"
         
         await query.edit_message_text(f"✅ تم اختيار جودة {quality}.\n\n{msg}")
     
@@ -247,7 +306,6 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data.clear()
         await query.edit_message_text("❌ تم إلغاء العملية.")
     
-    # ===== أزرار الإحصائيات =====
     elif data == "my_stats":
         conn = sqlite3.connect(DB_FILE)
         files_count = conn.execute(
@@ -261,7 +319,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 # ============================================
-# معالج الملفات (الصوت والفيديو) - النسخة المحسنة
+# معالج الملفات (الصوت والفيديو) - النسخة النهائية
 # ============================================
 async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await is_maintenance(update, context): 
@@ -273,7 +331,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ===== وضع mysong =====
     if mode and step:
-        # استقبال الملف الصوتي (جميع الصيغ)
+        # استقبال الملف الصوتي
         if step == 'waiting_for_audio' and mode in ['mysong_edit', 'mysong_new']:
             file_obj = None
             
@@ -281,13 +339,12 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_obj = update.message.audio
             elif update.message.document:
                 doc = update.message.document
-                # دعم جميع الصيغ الصوتية
                 audio_extensions = ('.mp3', '.m4a', '.aac', '.ogg', '.wav', '.flac', '.opus', '.wma')
                 if doc.file_name and doc.file_name.lower().endswith(audio_extensions):
                     file_obj = doc
             
             if not file_obj:
-                await update.message.reply_text("❌ من فضلك أرسل ملف صوتي صالح")
+                await update.message.reply_text("❌ من فضلك أرسل ملف صوتي صالح (MP3, M4A, AAC, OGG, WAV, FLAC)")
                 return
             
             if file_obj.file_size > MAX_FILE_SIZE:
@@ -297,16 +354,20 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             wait_msg = await update.message.reply_text("⏳ جاري تحميل الملف الصوتي...")
             tg_file = await file_obj.get_file()
             original_path = f"original_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            await tg_file.download_to_drive(original_path)
             
-            # تحويل إلى MP3 إذا لم يكن كذلك
+            try:
+                await asyncio.wait_for(tg_file.download_to_drive(original_path), timeout=DOWNLOAD_TIMEOUT_LARGE)
+            except asyncio.TimeoutError:
+                await wait_msg.edit_text("❌ انتهى وقت تحميل الملف")
+                context.user_data.clear()
+                return
+            
             audio_path = f"audio_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
             
             await wait_msg.edit_text("⏳ جاري معالجة وتحويل الملف الصوتي...")
             
-            success, error_msg = await convert_to_mp3(original_path, audio_path, "192k")
+            success, error_msg = await convert_to_mp3(original_path, audio_path, "192k", wait_msg)
             
-            # حذف الملف الأصلي
             if os.path.exists(original_path):
                 os.remove(original_path)
             
@@ -324,27 +385,41 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # استقبال ملف الفيديو
         elif step == 'waiting_for_video' and mode == 'mysong_extract':
-            if not update.message.video:
-                await update.message.reply_text("❌ من فضلك أرسل ملف فيديو")
+            file_obj = None
+            
+            if update.message.video:
+                file_obj = update.message.video
+            elif update.message.document:
+                doc = update.message.document
+                video_extensions = ('.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.m4v', '.mpg', '.mpeg')
+                if doc.file_name and doc.file_name.lower().endswith(video_extensions):
+                    file_obj = doc
+            
+            if not file_obj:
+                await update.message.reply_text("❌ من فضلك أرسل ملف فيديو (MP4, AVI, MKV, MOV)")
                 return
             
-            file_obj = update.message.video
             if file_obj.file_size > MAX_FILE_SIZE:
                 await update.message.reply_text(f"❌ حجم الملف كبير جداً (الحد الأقصى 70MB)")
                 return
             
-            wait_msg = await update.message.reply_text("⏳ جاري تحميل الفيديو واستخراج الصوت...")
+            wait_msg = await update.message.reply_text("⏳ جاري تحميل الفيديو...")
             tg_file = await file_obj.get_file()
             video_path = f"video_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            await tg_file.download_to_drive(video_path)
+            
+            try:
+                await asyncio.wait_for(tg_file.download_to_drive(video_path), timeout=DOWNLOAD_TIMEOUT_LARGE)
+            except asyncio.TimeoutError:
+                await wait_msg.edit_text("❌ انتهى وقت تحميل الفيديو")
+                context.user_data.clear()
+                return
             
             audio_path = f"extracted_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
             
-            await wait_msg.edit_text("⏳ جاري استخراج الصوت من الفيديو...")
+            await wait_msg.edit_text("⏳ جاري استخراج الصوت من الفيديو... (قد يستغرق 2-5 دقائق)")
             
-            success, error_msg = await extract_audio_from_video(video_path, audio_path, "192k")
+            success, error_msg = await extract_audio_from_video(video_path, audio_path, "192k", wait_msg)
             
-            # تنظيف ملف الفيديو
             if os.path.exists(video_path):
                 os.remove(video_path)
             
@@ -362,9 +437,9 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         else:
             if mode == 'mysong_extract':
-                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو")
+                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو (MP4, AVI, MKV, MOV)")
             elif mode in ['mysong_edit', 'mysong_new']:
-                await update.message.reply_text("❌ الرجاء إرسال ملف صوتي ")
+                await update.message.reply_text("❌ الرجاء إرسال ملف صوتي (MP3, M4A, WAV, OGG, FLAC)")
             return
     
     # ===== الوضع العادي =====
@@ -375,6 +450,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     file_obj = None
+    
     if action_type == "edit":
         if update.message.audio:
             file_obj = update.message.audio
@@ -385,21 +461,35 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_obj = doc
         
         if not file_obj:
-            await update.message.reply_text("❌ الرجاء إرسال ملف صوتي")
-            context.user_data.clear()
-            return
-            
-    elif action_type == "extract":
-        if update.message.video:
-            file_obj = update.message.video
-        
-        if not file_obj:
-            await update.message.reply_text("❌ الرجاء إرسال ملف فيديو ")
+            await update.message.reply_text("❌ الرجاء إرسال ملف صوتي (MP3, M4A, WAV, OGG, FLAC)")
             context.user_data.clear()
             return
     
+    elif action_type == "extract":
+        # ✅ دعم الفيديو بشكل كامل
+        if update.message.video:
+            file_obj = update.message.video
+        elif update.message.document:
+            doc = update.message.document
+            video_extensions = ('.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.m4v', '.mpg', '.mpeg')
+            if doc.file_name and doc.file_name.lower().endswith(video_extensions):
+                file_obj = doc
+            else:
+                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو صالح (MP4, AVI, MKV, MOV)")
+                context.user_data.clear()
+                return
+        else:
+            await update.message.reply_text("❌ الرجاء إرسال ملف فيديو (MP4, AVI, MKV, MOV)")
+            context.user_data.clear()
+            return
+    
+    if not file_obj:
+        await update.message.reply_text("❌ لم يتم التعرف على الملف، حاول مرة أخرى")
+        context.user_data.clear()
+        return
+    
     if file_obj.file_size > MAX_FILE_SIZE:
-        await update.message.reply_text("❌ حجم الملف كبير جداً (الحد الأقصى 70MB).")
+        await update.message.reply_text(f"❌ حجم الملف كبير جداً (الحد الأقصى 70MB).")
         context.user_data.clear()
         return
     
@@ -413,9 +503,13 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await tg_file.download_to_drive(original_path)
         
-        success, error_msg = await convert_to_mp3(original_path, output_path, quality)
+        if action_type == "extract":
+            await wait_msg.edit_text("⏳ جاري استخراج الصوت من الفيديو... (قد يستغرق 2-5 دقائق)")
+            success, error_msg = await extract_audio_from_video(original_path, output_path, quality, wait_msg)
+        else:
+            await wait_msg.edit_text("⏳ جاري تحويل الملف الصوتي...")
+            success, error_msg = await convert_to_mp3(original_path, output_path, quality, wait_msg)
         
-        # تنظيف ملف الإدخال
         if os.path.exists(original_path):
             os.remove(original_path)
         
@@ -431,7 +525,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await wait_msg.edit_text("📝 تمت المعالجة! الآن أرسل اسم الأغنية:")
         
     except Exception as e:
-        await wait_msg.edit_text(f"❌ حدث خطأ: {str(e)}")
+        await wait_msg.edit_text(f"❌ حدث خطأ: {str(e)[:200]}")
         for path in [original_path, output_path]:
             if 'path' in locals() and os.path.exists(path):
                 try:
@@ -564,7 +658,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     user_id = update.effective_user.id
 
-    # ===== الإذاعة للأدمن =====
     if context.user_data.get('admin_step') == 'broadcasting':
         if user_id != OWNER_ID:
             context.user_data['admin_step'] = None
@@ -586,7 +679,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ تمت الإذاعة بنجاح لـ {success_count} مستخدم.")
         return
 
-    # ===== أزرار القائمة الرئيسية =====
     if user_text == "▶️ تشغيل البوت":
         await start_handler(update, context)
         return
@@ -636,7 +728,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ هذه الخاصية متاحة للمطور فقط.")
         return
 
-    # ===== وضع mysong - استقبال النصوص =====
     if context.user_data.get('mode'):
         step = context.user_data.get('step')
         
@@ -665,7 +756,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ أنا في انتظار صورة وليس نص. أرسل صورة من فضلك.")
             return
 
-    # ===== إكمال عملية التعديل العادي =====
     if "file_path" in context.user_data:
         step = context.user_data.get("step")
         file_path = context.user_data["file_path"]
