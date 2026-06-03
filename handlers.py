@@ -9,7 +9,7 @@ from mutagen.id3 import ID3, TIT2, TPE1, APIC, error as MutagenError
 
 from utils import (
     check_subscription, is_maintenance, DB_FILE, OWNER_ID, 
-    MAX_FILE_SIZE, get_channel_cover, add_user, add_file_record
+    MAX_FILE_SIZE, get_channel_cover, add_user, add_file_record, fix_audio_file
 )
 
 # ============================================
@@ -171,9 +171,11 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             audio_path = f"extracted_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
             
+            # أمر محسن لاستخراج الصوت
             cmd = [
                 "ffmpeg", "-i", video_path, "-vn", "-acodec", "libmp3lame",
-                "-ac", "2", "-b:a", "192k", audio_path, "-y"
+                "-ac", "2", "-ar", "44100", "-b:a", "192k",
+                "-af", "volume=1.0", "-y", audio_path
             ]
             
             process = await asyncio.create_subprocess_exec(
@@ -187,7 +189,13 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if process.returncode != 0:
                 await wait_msg.edit_text("❌ حدث خطأ أثناء استخراج الصوت.")
-                # تنظيف ملف الصوت في حالة الفشل
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                return
+            
+            # التحقق من أن الملف يحتوي على صوت
+            if not await verify_audio_file(audio_path):
+                await wait_msg.edit_text("❌ فشل استخراج الصوت - الملف لا يحتوي على بيانات صوتية صالحة.")
                 if os.path.exists(audio_path):
                     os.remove(audio_path)
                 return
@@ -251,20 +259,30 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await tg_file.download_to_drive(input_path)
         
-        cmd = [
-            "ffmpeg", "-i", input_path, "-vn", "-acodec", "libmp3lame",
-            "-ac", "2", "-b:a", quality, output_path, "-y"
-        ]
+        # التحقق من أن الملف ليس فارغاً
+        if os.path.getsize(input_path) < 1024:
+            await wait_msg.edit_text("❌ الملف المرسل فارغ أو تالف.")
+            os.remove(input_path)
+            context.user_data.clear()
+            return
         
-        process = subprocess.run(cmd, capture_output=True)
+        # استخدام دالة fix_audio_file المحسنة
+        result, error = fix_audio_file(input_path, output_path, quality)
         
         # تنظيف ملف الإدخال
         if os.path.exists(input_path):
             os.remove(input_path)
         
-        if process.returncode != 0:
-            await wait_msg.edit_text("❌ حدث خطأ أثناء المعالجة.")
-            # تنظيف ملف الإخراج
+        if result is None:
+            await wait_msg.edit_text(f"❌ حدث خطأ أثناء المعالجة:\n{error}")
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            context.user_data.clear()
+            return
+        
+        # التحقق النهائي من الملف
+        if not await verify_audio_file(output_path):
+            await wait_msg.edit_text("❌ الملف المعالج لا يحتوي على بيانات صوتية صالحة.")
             if os.path.exists(output_path):
                 os.remove(output_path)
             context.user_data.clear()
@@ -284,6 +302,48 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except:
                     pass
         context.user_data.clear()
+
+# ============================================
+# دالة مساعدة للتحقق من صحة الملف الصوتي
+# ============================================
+async def verify_audio_file(file_path: str) -> bool:
+    """التحقق من أن الملف الصوتي يحتوي على بيانات صوتية صالحة"""
+    try:
+        if not os.path.exists(file_path) or os.path.getsize(file_path) < 1024:
+            return False
+        
+        cmd = [
+            "ffprobe", "-v", "error", 
+            "-show_entries", "stream=codec_type", 
+            "-of", "default=noprint_wrappers=1", 
+            file_path
+        ]
+        
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, _ = await process.communicate()
+        
+        # التحقق من وجود مسار صوتي
+        if b"audio" in stdout:
+            return True
+        
+        # فحص إضافي باستخدام mutagen
+        try:
+            from mutagen.mp3 import MP3
+            audio = MP3(file_path)
+            if audio.info.length > 0:
+                return True
+        except:
+            pass
+        
+        return False
+        
+    except Exception:
+        return False
 
 # ============================================
 # معالج الصور
