@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import logging
+import subprocess
 from datetime import datetime, timedelta
 from telegram.ext import ContextTypes
 
@@ -243,3 +244,79 @@ def get_total_stats():
     finally:
         if conn:
             conn.close()
+
+# ============================================
+# دالة إصلاح الملفات الصوتية (المضافة حديثاً)
+# ============================================
+def fix_audio_file(input_path: str, output_path: str, quality: str = "192k"):
+    """
+    معالجة الملف الصوتي بشكل آمن وتحويله إلى MP3
+    تعيد (مسار_الملف, رسالة_الخطأ) - إذا كان الأول None يعني فشل
+    """
+    try:
+        # أولاً: تحليل الملف للتأكد من وجود صوت باستخدام ffprobe
+        probe_cmd = [
+            "ffprobe", "-v", "error", 
+            "-show_entries", "stream=codec_type", 
+            "-of", "default=noprint_wrappers=1", 
+            input_path
+        ]
+        
+        try:
+            result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+            if "audio" not in result.stdout:
+                return None, "الملف لا يحتوي على مسار صوتي"
+        except subprocess.TimeoutExpired:
+            return None, "انتهى وقت التحليل"
+        except Exception as e:
+            logging.warning(f"تحذير في ffprobe: {e}")
+        
+        # ثانياً: التحويل مع إعادة ترميز كامل ومحسن
+        # استخدام -map_metadata -1 لإزالة أي بيانات تالفة قد تسبب مشاكل
+        cmd = [
+            "ffmpeg", "-i", input_path,
+            "-vn",                           # إزالة الفيديو
+            "-acodec", "libmp3lame",         # ترميز MP3
+            "-ac", "2",                      # ستيريو
+            "-ar", "44100",                  # تردد 44.1kHz (قياسي لـ MP3)
+            "-b:a", quality,                 # الجودة المختارة
+            "-af", "volume=1.0,aresample=44100",  # تصحيح مستوى الصوت وإعادة العينة
+            "-write_xing", "1",              # إضافة Xing header للـ MP3 (للتشغيل السليم)
+            "-map_metadata", "-1",           # إزالة metadata تالفة
+            "-y",                            # الكتابة فوق الملف الموجود
+            output_path
+        ]
+        
+        # تنفيذ الأمر مع timeout أطول للملفات الكبيرة
+        process = subprocess.run(cmd, capture_output=True, timeout=120)
+        
+        if process.returncode != 0:
+            error_msg = process.stderr.decode()[:200] if process.stderr else "خطأ غير معروف"
+            return None, f"ffmpeg error: {error_msg}"
+        
+        # ثالثاً: التحقق من أن الملف الناتج يحتوي على صوت
+        if not os.path.exists(output_path):
+            return None, "الملف الناتج غير موجود"
+        
+        if os.path.getsize(output_path) < 2048:  # أقل من 2KB يعتبر تالف
+            return None, "الملف الناتج صغير جداً (احتمال تالف)"
+        
+        # فحص إضافي باستخدام mutagen للتأكد
+        try:
+            from mutagen.mp3 import MP3
+            audio = MP3(output_path)
+            if audio.info.length <= 0:
+                return None, "مدة الملف الصوتي صفرية"
+            if audio.info.bitrate <= 0:
+                logging.warning(f"تحذير: معدل البت غير طبيعي للملف {output_path}")
+        except ImportError:
+            pass  # mutagen غير متوفر، نتخطى الفحص
+        except Exception as e:
+            logging.warning(f"تحذير في فحص mutagen: {e}")
+        
+        return output_path, "success"
+        
+    except subprocess.TimeoutExpired:
+        return None, "انتهى وقت معالجة الملف (الملف كبير جداً)"
+    except Exception as e:
+        return None, f"خطأ غير متوقع: {str(e)[:100]}"
