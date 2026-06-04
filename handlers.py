@@ -67,7 +67,7 @@ async def convert_to_mp3(input_path: str, output_path: str, quality: str = "192k
         elif file_size > 30 * 1024 * 1024:
             timeout_value = 300
         
-        if progress_msg and file_size_mb > 80:
+        if progress_msg and file_size_mb > 15:
             await progress_msg.edit_text(
                 f"⏳ **جاري تحويل ملف كبير ({file_size_mb:.1f} MB)**\n\n"
                 f"⏱️ قد يستغرق {int(timeout_value/60)}-{int(timeout_value/60)+2} دقائق...\n"
@@ -264,7 +264,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['step'] = 'waiting_for_audio'
         await query.edit_message_text(
             "🎵 تعديل أغنية موجودة\n\n"
-            "📤 أرسل لي الآن الملف الصوتي (MP3, M4A, AAC, OGG, WAV, FLAC) الذي تريد تعديله.\n\n"
+            "📤 أرسل لي الآن الملف الصوتي الذي تريد تعديله.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
     
@@ -274,7 +274,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['step'] = 'waiting_for_video'
         await query.edit_message_text(
             "🎬 استخراج صوت من فيديو + إضافة صورة\n\n"
-            "📤 أرسل لي الآن ملف الفيديو (MP4, AVI, MKV, MOV) لاستخراج الصوت منه.\n\n"
+            "📤 أرسل لي الآن ملف الفيديو لاستخراج الصوت منه.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
     
@@ -284,7 +284,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['step'] = 'waiting_for_audio'
         await query.edit_message_text(
             "🆕 رفع ملف صوتي جديد + صورة\n\n"
-            "📤 أرسل لي الآن الملف الصوتي (MP3, M4A, AAC, OGG, WAV, FLAC).\n\n"
+            "📤 أرسل لي الآن الملف الصوتي.\n\n"
             "⚠️ الحد الأقصى للحجم: 70MB"
         )
     
@@ -296,9 +296,9 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['action_type'] = action
         
         if action == "edit":
-            msg = "🎵 أرسل الآن الملف الصوتي (MP3, M4A, OGG, WAV, FLAC) لتعديله:"
+            msg = "🎵 أرسل الآن الملف الصوتي لتعديله:"
         else:
-            msg = "🎬 أرسل الآن ملف الفيديو (MP4, AVI, MKV, MOV) لاستخراج الصوت منه:"
+            msg = "🎬 أرسل الآن ملف الفيديو لاستخراج الصوت منه:"
         
         await query.edit_message_text(f"✅ تم اختيار جودة {quality}.\n\n{msg}")
     
@@ -344,7 +344,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     file_obj = doc
             
             if not file_obj:
-                await update.message.reply_text("❌ من فضلك أرسل ملف صوتي صالح (MP3, M4A, AAC, OGG, WAV, FLAC)")
+                await update.message.reply_text("❌ من فضلك أرسل ملف صوتي صالح")
                 return
             
             if file_obj.file_size > MAX_FILE_SIZE:
@@ -396,7 +396,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     file_obj = doc
             
             if not file_obj:
-                await update.message.reply_text("❌ من فضلك أرسل ملف فيديو (MP4, AVI, MKV, MOV)")
+                await update.message.reply_text("❌ من فضلك أرسل ملف فيديو")
                 return
             
             if file_obj.file_size > MAX_FILE_SIZE:
@@ -437,9 +437,9 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         else:
             if mode == 'mysong_extract':
-                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو (MP4, AVI, MKV, MOV)")
+                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو")
             elif mode in ['mysong_edit', 'mysong_new']:
-                await update.message.reply_text("❌ الرجاء إرسال ملف صوتي (MP3, M4A, WAV, OGG, FLAC)")
+                await update.message.reply_text("❌ الرجاء إرسال ملف صوتي")
             return
     
     # ===== الوضع العادي =====
@@ -461,7 +461,7 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_obj = doc
         
         if not file_obj:
-            await update.message.reply_text("❌ الرجاء إرسال ملف صوتي (MP3, M4A, WAV, OGG, FLAC)")
+            await update.message.reply_text("❌ الرجاء إرسال ملف صوتي")
             context.user_data.clear()
             return
     
@@ -475,11 +475,11 @@ async def media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if doc.file_name and doc.file_name.lower().endswith(video_extensions):
                 file_obj = doc
             else:
-                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو صالح (MP4, AVI, MKV, MOV)")
+                await update.message.reply_text("❌ الرجاء إرسال ملف فيديو صالح")
                 context.user_data.clear()
                 return
         else:
-            await update.message.reply_text("❌ الرجاء إرسال ملف فيديو (MP4, AVI, MKV, MOV)")
+            await update.message.reply_text("❌ الرجاء إرسال ملف فيديو")
             context.user_data.clear()
             return
     
